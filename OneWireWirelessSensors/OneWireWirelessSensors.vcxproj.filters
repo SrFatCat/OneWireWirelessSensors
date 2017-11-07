@@ -27,6 +27,9 @@
     <ClInclude Include="RCSwitchOregon.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="WH2Sensor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="RCSwitchOregon.cpp">

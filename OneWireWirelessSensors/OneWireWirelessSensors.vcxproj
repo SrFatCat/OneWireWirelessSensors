@@ -84,6 +84,7 @@
   <ItemGroup>
     <ClInclude Include="OneWireSlave.h" />
     <ClInclude Include="RCSwitchOregon.h" />
+    <ClInclude Include="WH2Sensor.h" />
     <ClInclude Include="__vm\.OneWireWirelessSensors.vsarduino.h" />
   </ItemGroup>
   <ItemGroup>
