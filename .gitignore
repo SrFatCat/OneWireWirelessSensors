@@ -6,6 +6,10 @@
 *.user
 *.userosscache
 *.sln.docstates
+OneWireWirelessSensors/Debug/
+OneWireWirelessSensors/__vm/
+OneWireWirelessSensors/OneWireWirelessSensors.vcx*.*
+OneWireWirelessSensors/OneWireWirelessSensors.vcx*
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
