@@ -7,7 +7,7 @@ OneWireSlave ds(PIN_ONE_WIRE);
 unsigned char rom[8] = { 0x01, 0xAD, 0xDA, 0xCE, 0x0F, 0x00, 0x00, 0xFF }; 
 			
 struct SSensorData {
-	uint8_t buf_data[8];
+	char buf_data[8];
 	bool received = false;
 	unsigned long prev_t = 0;
 } sensor_data[2];
@@ -96,80 +96,19 @@ void oneWireHandler() {
 	for (;;) {
 		cmd = ds.recv();
 		if (cmd == 0xA1) {
-			ds.sendData(test_data /*sensor_data[0].buf_data*/, 8);
+			ds.sendData(/*test_data */sensor_data[0].buf_data, 8);
 			s1 = true;
 		}
 		else if (cmd == 0xA2) {
-			ds.sendData(test_data/*sensor_data[1].buf_data*/, 8);
+			ds.sendData(/*test_data*/sensor_data[0].buf_data, 8);
 			s2 = true;
 		}
 		if (s1 && s2) {
-			//mustOneWire = false;
 			wh2.startTimerHandler();
 			break;
 		}
 	}
-
-	//if (millis() - tttt > 2000) mustOneWire = false;
-	//if (ds.waitReset(0) && ds.presence(25)) {
-	//	bool isBreak = false;
-	//	char addr[8];
-	//	for (;;) {
-	//		switch (ds.recv()) {
-	//		case 0xF0: // SEARCH ROM
-	//			ds.search();
-	//			Serial.println("SEARCH ROM");
-	//			isBreak = true;
-	//			break;
-	//		case 0x33: // READ ROM
-	//			ds.sendData((char *)rom, 8);
-	//			Serial.println("READ ROM");
-	//			isBreak = true;
-	//			break;
-	//		case 0x55: // MATCH ROM
-	//			ds.recvData(addr, 8);
-	//			cmd = ds.recv();
-	//			if (s1 = (cmd == 0xA1)) ds.sendData(test_data /*sensor_data[0].buf_data*/, 8);
-	//			else if (s2 = (cmd == 0xA2)) ds.sendData(test_data/*sensor_data[1].buf_data*/, 8);
-	//			if (s1 && s2) {
-	//				mustOneWire = false;
-	//				wh2.startTimerHandler();
-	//			}
-	//			//if (errno != ONEWIRE_NO_ERROR)
-	//			//	return FALSE;
-	//			//ds.recvData(buf, sizeof(buf));
-	//			//for (int i = 0; i < 8; i++) {
-	//			//	Serial.print(buf[i]); Serial.print(" ");
-	//			//}
-	//			//for (int i = 0; i < 5; i++) {
-	//			//	ds.send(buf1[i]);
-	//			//}
-	//			//	if (rom[i] != addr[i])
-	//			//		return FALSE;
-	//			//return TRUE;
-	//			//Serial.println("MATCH ROM");
-	//			isBreak = true;
-	//			break;
-	//		case 0xCC: // SKIP ROM
-	//				   //ds.recvData(buf, sizeof(buf)); //��������� ������
-	//				   //Serial.print("I: ");
-	//				   //for (int i = sizeof(buf) - 1; i >= 0; i--) {
-	//				   //	//Serial.print((int)(buf[i]), HEX);
-	//				   //	//Serial.print(" ");
-	//				   //	ds.send(buf1[i]); //�������� ��������
-	//				   //}
-	//				   //Serial.println("SKIP ROM");
-	//			isBreak = true;
-	//			break;
-	//		default: // Unknow command
-	//				 //if (errno == ONEWIRE_NO_ERROR)
-	//				 //	break; // skip if no error
-	//				 //else
-	//				 //	return FALSE;
-	//			break;
-	//		}
-	//		if (isBreak) break;
-	//	}
+	Serial.print("^");
 }
 
 void setup() {
@@ -186,96 +125,44 @@ void setup() {
 // id id t t tm tm vl
 
 void loop() {
-
-	if (mustOneWire) {
-		oneWireHandler();
-	}
-	else {
-		if (processTimerWH2Handler()) {
-			//int d = wh2.sensor_id();
-			//sensor_data[0].received = true;
-			//sensor_data[0].buf_data[0] = highByte(d);
-			//sensor_data[0].buf_data[1] = lowByte(d);
-			//sensor_data[0].prev_t = millis() - sensor_data[0].prev_t;
-			//sensor_data[0].buf_data[2] = highByte(int(sensor_data[0].prev_t/1000));
-			//sensor_data[0].buf_data[3] = lowByte(int(sensor_data[0].prev_t / 1000));
-			//d = wh2.temperature();
-			//sensor_data[0].buf_data[4] = highByte(d);
-			//sensor_data[0].buf_data[5] = lowByte(d);
-			//sensor_data[0].buf_data[6] = wh2.humidity();
-			//sensor_data[0].buf_data[7] = OneWireSlave::crc8(sensor_data[0].buf_data, 7);
-			mustOneWire = true;
-			tttt = millis();
-			s1 = s2 = false;
-			wh2.stopTimerHandler();
+	if (processTimerWH2Handler()) {
+		wh2.stopTimerHandler();
+		int d = wh2.sensor_id();
+		sensor_data[0].received = true;
+		sensor_data[0].buf_data[0] = highByte(d);
+		sensor_data[0].buf_data[1] = lowByte(d);
+		sensor_data[0].prev_t = millis() - sensor_data[0].prev_t;
+		sensor_data[0].buf_data[2] = highByte(int(sensor_data[0].prev_t/1000));
+		sensor_data[0].buf_data[3] = lowByte(int(sensor_data[0].prev_t / 1000));
+		d = wh2.temperature();
+		sensor_data[0].buf_data[4] = highByte(d);
+		sensor_data[0].buf_data[5] = lowByte(d);
+		sensor_data[0].buf_data[6] = wh2.humidity();
+		sensor_data[0].buf_data[7] = OneWireSlave::crc8(sensor_data[0].buf_data, 7);
+		for (int i = 0; i < 8; i++) {
+			Serial.print((int)(sensor_data[0].buf_data[i]));
+			Serial.print(".");
 		}
+		Serial.println();
+		s1 = s2 = false;
+		oneWireHandler();
 	}
 }
 
 bool processTimerWH2Handler() {
-	static uint16_t hits = 0;
-	static unsigned long old = 0, packet_count = 0, bad_count = 0, average_interval;
-	unsigned long spacing, now;
-	bool ret = false;
-
+	bool retrn = false;
 	if (wh2_flags) {
 		if (wh2.accept()) {
 			// calculate the CRC
 			wh2.calculate_crc();
-
-			now = millis();
-			spacing = now - old;
-			old = now;
-			packet_count++;
-			average_interval = now / packet_count;
-			if (!wh2.valid()) {
-				bad_count++;
+			if (wh2.valid()) {
+				retrn = true;
 			}
-			else {
-				//Serial.print(packet_count, DEC);
-				//Serial.print(" | ");
-				//Serial.print(bad_count, DEC);
-				//Serial.print(" | ");
-				//Serial.print(spacing, DEC);
-				//Serial.print(" | ");
-				//Serial.print(average_interval, DEC);
-				//Serial.print(" | ");
 
-		/*		if (true || wh2_packet[0] == 73) {
-					Serial.print("{" + String(++hits) + " " + String(millis() / 1000l) + "} ");
-
-					for (i = 0; i < 5; i++) {
-						Serial.print(wh2_packet[i], BIN);
-						Serial.print(" ");
-					}
-					Serial.print(" / ");
-					for (i = 0; i < 5; i++) {
-						Serial.print(wh2_packet[i], DEC);
-						Serial.print(" ");
-					}
-					Serial.println();
-				}*/
-				//for (i = 0; i<5; i++) {
-				//	Serial.print("0x");
-				//	Serial.print(wh2_packet[i], HEX);
-				//	Serial.print("/");
-				//	Serial.print(wh2_packet[i], DEC);
-				//	Serial.print(" ");
-				//}
-				Serial.print("| Sensor ID: 0x");
-				Serial.print(wh2.sensor_id(), HEX);
-				Serial.print(" | ");
-				Serial.print(wh2.humidity(), DEC);
-				Serial.print("% | ");
-				Serial.println(wh2.temperature(), DEC);
-				//Serial.print(" | ");
-				//Serial.println((wh2_valid() ? "OK" : "BAD"));
-				ret = true;
-			}
 		}
 		wh2_flags = 0x00;
 	}
-	return ret;
+	return retrn;
 }
 
 // processes new pulse
