@@ -51,5 +51,7 @@ public:
 	int sensor_id();
 	byte humidity();
 	int temperature();
+	inline void stopTimerHandler() { TIMSK1 = 0x00; }
+	inline void startTimerHandler() { TIMSK1 = 0x02; }
 };
 

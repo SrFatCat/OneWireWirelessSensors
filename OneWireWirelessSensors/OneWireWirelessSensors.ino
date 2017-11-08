@@ -86,70 +86,94 @@ RCSwitch rcs; //RCswitch sensor
 
 unsigned int timings[RC_MAX_PULSE_BUFFER];
 
+static unsigned long tttt = 0;
+bool s1 = false, s2 = false;
+
 void oneWireHandler() {
 	uint8_t cmd;
-	if (ds.waitReset(0) && ds.presence(25)) {
-		bool isBreak = false;
-		char addr[8];
-		for (;;) {
-			switch (ds.recv()) {
-			case 0xF0: // SEARCH ROM
-				ds.search();
-				Serial.println("SEARCH ROM");
-				isBreak = true;
-				break;
-			case 0x33: // READ ROM
-				ds.sendData((char *)rom, 8);
-				Serial.println("READ ROM");
-				isBreak = true;
-				break;
-			case 0x55: // MATCH ROM
-				ds.recvData(addr, 8);
-				cmd = ds.recv();
-				if (cmd == 0xA1) ds.sendData(test_data /*sensor_data[0].buf_data*/, 8);
-				else if (cmd == 0xA2) ds.sendData(test_data/*sensor_data[1].buf_data*/, 8);
-				mustOneWire = false;
-				//if (errno != ONEWIRE_NO_ERROR)
-				//	return FALSE;
-				//ds.recvData(buf, sizeof(buf));
-				//for (int i = 0; i < 8; i++) {
-				//	Serial.print(buf[i]); Serial.print(" ");
-				//}
-				//for (int i = 0; i < 5; i++) {
-				//	ds.send(buf1[i]);
-				//}
-				//	if (rom[i] != addr[i])
-				//		return FALSE;
-				//return TRUE;
-				//Serial.println("MATCH ROM");
-				isBreak = true;
-				break;
-			case 0xCC: // SKIP ROM
-					   //ds.recvData(buf, sizeof(buf)); //��������� ������
-					   //Serial.print("I: ");
-					   //for (int i = sizeof(buf) - 1; i >= 0; i--) {
-					   //	//Serial.print((int)(buf[i]), HEX);
-					   //	//Serial.print(" ");
-					   //	ds.send(buf1[i]); //�������� ��������
-					   //}
-					   //Serial.println("SKIP ROM");
-				isBreak = true;
-				break;
-			default: // Unknow command
-					 //if (errno == ONEWIRE_NO_ERROR)
-					 //	break; // skip if no error
-					 //else
-					 //	return FALSE;
-				break;
-			}
-			if (isBreak) break;
-		}
 
+	ds.waitForRequest(false);
+	for (;;) {
+		cmd = ds.recv();
+		if (cmd == 0xA1) {
+			ds.sendData(test_data /*sensor_data[0].buf_data*/, 8);
+			s1 = true;
+		}
+		else if (cmd == 0xA2) {
+			ds.sendData(test_data/*sensor_data[1].buf_data*/, 8);
+			s2 = true;
+		}
+		if (s1 && s2) {
+			//mustOneWire = false;
+			wh2.startTimerHandler();
+			break;
+		}
 	}
+
+	//if (millis() - tttt > 2000) mustOneWire = false;
+	//if (ds.waitReset(0) && ds.presence(25)) {
+	//	bool isBreak = false;
+	//	char addr[8];
+	//	for (;;) {
+	//		switch (ds.recv()) {
+	//		case 0xF0: // SEARCH ROM
+	//			ds.search();
+	//			Serial.println("SEARCH ROM");
+	//			isBreak = true;
+	//			break;
+	//		case 0x33: // READ ROM
+	//			ds.sendData((char *)rom, 8);
+	//			Serial.println("READ ROM");
+	//			isBreak = true;
+	//			break;
+	//		case 0x55: // MATCH ROM
+	//			ds.recvData(addr, 8);
+	//			cmd = ds.recv();
+	//			if (s1 = (cmd == 0xA1)) ds.sendData(test_data /*sensor_data[0].buf_data*/, 8);
+	//			else if (s2 = (cmd == 0xA2)) ds.sendData(test_data/*sensor_data[1].buf_data*/, 8);
+	//			if (s1 && s2) {
+	//				mustOneWire = false;
+	//				wh2.startTimerHandler();
+	//			}
+	//			//if (errno != ONEWIRE_NO_ERROR)
+	//			//	return FALSE;
+	//			//ds.recvData(buf, sizeof(buf));
+	//			//for (int i = 0; i < 8; i++) {
+	//			//	Serial.print(buf[i]); Serial.print(" ");
+	//			//}
+	//			//for (int i = 0; i < 5; i++) {
+	//			//	ds.send(buf1[i]);
+	//			//}
+	//			//	if (rom[i] != addr[i])
+	//			//		return FALSE;
+	//			//return TRUE;
+	//			//Serial.println("MATCH ROM");
+	//			isBreak = true;
+	//			break;
+	//		case 0xCC: // SKIP ROM
+	//				   //ds.recvData(buf, sizeof(buf)); //��������� ������
+	//				   //Serial.print("I: ");
+	//				   //for (int i = sizeof(buf) - 1; i >= 0; i--) {
+	//				   //	//Serial.print((int)(buf[i]), HEX);
+	//				   //	//Serial.print(" ");
+	//				   //	ds.send(buf1[i]); //�������� ��������
+	//				   //}
+	//				   //Serial.println("SKIP ROM");
+	//			isBreak = true;
+	//			break;
+	//		default: // Unknow command
+	//				 //if (errno == ONEWIRE_NO_ERROR)
+	//				 //	break; // skip if no error
+	//				 //else
+	//				 //	return FALSE;
+	//			break;
+	//		}
+	//		if (isBreak) break;
+	//	}
 }
 
 void setup() {
-	Serial.begin(115200);
+	Serial.begin(9600);
 	Serial.println("\n[ookDecoder]");
 
 	pinMode(2, INPUT);
@@ -180,7 +204,10 @@ void loop() {
 			//sensor_data[0].buf_data[5] = lowByte(d);
 			//sensor_data[0].buf_data[6] = wh2.humidity();
 			//sensor_data[0].buf_data[7] = OneWireSlave::crc8(sensor_data[0].buf_data, 7);
-			//mustOneWire = true;
+			mustOneWire = true;
+			tttt = millis();
+			s1 = s2 = false;
+			wh2.stopTimerHandler();
 		}
 	}
 }
@@ -363,7 +390,6 @@ void WH2TimerDecoder::init() {
 	TCCR1B = 0x09;
 	TCCR1C = 0x00;
 	OCR1A = COUNTER_RATE;
-	TIMSK1 = 0x02;
-
+	startTimerHandler();
 	sei();
 }
