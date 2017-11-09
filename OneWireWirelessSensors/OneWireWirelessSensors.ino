@@ -5,16 +5,13 @@
 #define PIN_ONE_WIRE 3
 OneWireSlave ds(PIN_ONE_WIRE);
 unsigned char rom[8] = { 0x01, 0xAD, 0xDA, 0xCE, 0x0F, 0x00, 0x00, 0xFF }; 
-			
+
+#define SENSORS_NUM 2
 struct SSensorData {
-	char buf_data[8];
+	char buf_data[8] = {0,0,0,0,0,0,0,0};
 	bool received = false;
 	unsigned long prev_t = 0;
-} sensor_data[2];
-
-char test_data[8] = { 0,55,0,100,1,255,30 };
-
-bool mustOneWire = false;
+} sensor_data[SENSORS_NUM];
 
 //WH2 Timer Handler
 ISR(TIMER1_COMPA_vect)
@@ -25,7 +22,7 @@ ISR(TIMER1_COMPA_vect)
 
 	switch (sampling_state) {
 	case 0: // waiting
-		wh2_packet_state = 0;
+		WH2TimerDecoder::resetPacketState(); // packet_state = 0;
 		if (RF_HI) {
 			if (was_low) {
 				count = 0;
@@ -42,12 +39,12 @@ ISR(TIMER1_COMPA_vect)
 		// end of first pulse
 		if (RF_LOW) {
 			if (IS_HI_PULSE(count)) {
-				wh2_flags = GOT_PULSE | LOGIC_HI;
+				WH2TimerDecoder::setFlags(GOT_PULSE | LOGIC_HI); // wh2_flags = GOT_PULSE | LOGIC_HI;
 				sampling_state = 2;
 				count = 0;
 			}
 			else if (IS_LOW_PULSE(count)) {
-				wh2_flags = GOT_PULSE; // logic low
+				WH2TimerDecoder::setFlags(GOT_PULSE);// wh2_flags = GOT_PULSE; // logic low
 				sampling_state = 2;
 				count = 0;
 			}
@@ -70,14 +67,15 @@ ISR(TIMER1_COMPA_vect)
 		break;
 	}
 
-	if (wh2_timeout > 0) {
-		wh2_timeout++;
-		if (HAS_TIMED_OUT(wh2_timeout)) {
-			wh2_packet_state = 0;
-			wh2_timeout = 0;
+	if (WH2TimerDecoder::isTimeout() /*wh2_timeout > 0*/) {
+		WH2TimerDecoder::incTimeout(); //wh2_timeout++;
+		if (WH2TimerDecoder::checkTimeout() /*HAS_TIMED_OUT(wh2_timeout)*/) {
+			WH2TimerDecoder::resetPacketState(); // wh2_packet_state = 0;
+			WH2TimerDecoder::resetTimeout(); // wh2_timeout = 0;
 		}
 	}
 }
+
 WH2TimerDecoder wh2;
 
 OregonDecoderV3 orscV3; // Oregon Scientific V3 sensor
@@ -85,9 +83,6 @@ OregonDecoderV3 orscV3; // Oregon Scientific V3 sensor
 RCSwitch rcs; //RCswitch sensor
 
 unsigned int timings[RC_MAX_PULSE_BUFFER];
-
-static unsigned long tttt = 0;
-bool s1 = false, s2 = false;
 
 void oneWireHandler() {
 	uint8_t cmd;
@@ -97,11 +92,11 @@ void oneWireHandler() {
 		cmd = ds.recv();
 		if (cmd == 0xA1) {
 			ds.sendData(/*test_data */sensor_data[0].buf_data, 8);
-			s1 = true;
+			sensor_data[0].received = false;
 		}
 		else if (cmd == 0xA2) {
-			ds.sendData(/*test_data*/sensor_data[0].buf_data, 8);
-			s2 = true;
+			ds.sendData(/*test_data*/sensor_data[1].buf_data, 8);
+			sensor_data[1].received = false;
 		}
 		if (s1 && s2) {
 			wh2.startTimerHandler();
@@ -109,6 +104,26 @@ void oneWireHandler() {
 		}
 	}
 	Serial.print("^");
+}
+
+void fillSensorData(uint8_t idx) {
+	int d = wh2.sensor_id();
+	sensor_data[idx].received = true;
+	sensor_data[idx].buf_data[0] = highByte(d);
+	sensor_data[idx].buf_data[1] = lowByte(d);
+	sensor_data[idx].prev_t = millis() - sensor_data[idx].prev_t;
+	sensor_data[idx].buf_data[2] = highByte(int(sensor_data[idx].prev_t / 1000));
+	sensor_data[idx].buf_data[3] = lowByte(int(sensor_data[idx].prev_t / 1000));
+	d = wh2.temperature();
+	sensor_data[idx].buf_data[4] = highByte(d);
+	sensor_data[idx].buf_data[5] = lowByte(d);
+	sensor_data[idx].buf_data[6] = wh2.humidity();
+	sensor_data[idx].buf_data[7] = OneWireSlave::crc8(sensor_data[0].buf_data, 7);
+	for (int i = 0; i < 8; i++) {
+		Serial.print((int)(sensor_data[0].buf_data[i]));
+		Serial.print(".");
+	}
+	Serial.println();
 }
 
 void setup() {
@@ -119,48 +134,50 @@ void setup() {
 	rcs.enableReceive(0);
 
 	wh2.init();
-	test_data[7] = OneWireSlave::crc8((char *)test_data, 7);
+
 	ds.setRom(rom); 
+
+	sensor_data[0].buf_data[0] = sensor_data[0].buf_data[1] = sensor_data[1].buf_data[0] = sensor_data[1].buf_data[1] = 0;
 }
 // id id t t tm tm vl
 
 void loop() {
-	if (processTimerWH2Handler()) {
+	if (wh2.getSensorData()) {
 		wh2.stopTimerHandler();
-		int d = wh2.sensor_id();
-		sensor_data[0].received = true;
-		sensor_data[0].buf_data[0] = highByte(d);
-		sensor_data[0].buf_data[1] = lowByte(d);
-		sensor_data[0].prev_t = millis() - sensor_data[0].prev_t;
-		sensor_data[0].buf_data[2] = highByte(int(sensor_data[0].prev_t/1000));
-		sensor_data[0].buf_data[3] = lowByte(int(sensor_data[0].prev_t / 1000));
-		d = wh2.temperature();
-		sensor_data[0].buf_data[4] = highByte(d);
-		sensor_data[0].buf_data[5] = lowByte(d);
-		sensor_data[0].buf_data[6] = wh2.humidity();
-		sensor_data[0].buf_data[7] = OneWireSlave::crc8(sensor_data[0].buf_data, 7);
-		for (int i = 0; i < 8; i++) {
-			Serial.print((int)(sensor_data[0].buf_data[i]));
-			Serial.print(".");
+		bool isReceivedComplete = false;
+		if (sensor_data[0].buf_data[0] << 8 | sensor_data[0].buf_data[1] == wh2.sensor_id()) {
+			if (sensor_data[0].received) isReceivedComplete = true;
+			fillSensorData(0);
 		}
-		Serial.println();
+		else
+			if (sensor_data[1].buf_data[0] << 8 | sensor_data[1].buf_data[1] == wh2.sensor_id()) {
+				if (sensor_data[1].received) isReceivedComplete = true;
+				fillSensorData(1);
+			}
+			else {
+				if (!sensor_data[0].received) fillSensorData(0); else fillSensorData(1);
+			}
+
+
+		int id = wh2.sensor_id();
+		
 		s1 = s2 = false;
 		oneWireHandler();
 	}
 }
 
-bool processTimerWH2Handler() {
+bool WH2TimerDecoder::getSensorData() {
 	bool retrn = false;
-	if (wh2_flags) {
-		if (wh2.accept()) {
+	if (flags) {
+		if (accept()) {
 			// calculate the CRC
-			wh2.calculate_crc();
-			if (wh2.valid()) {
+			calculate_crc();
+			if (valid()) {
 				retrn = true;
 			}
 
 		}
-		wh2_flags = 0x00;
+		flags = 0x00;
 	}
 	return retrn;
 }
@@ -171,20 +188,20 @@ boolean  WH2TimerDecoder::accept()
 	static byte packet_no, bit_no, history;
 
 	// reset if in initial wh2_packet_state
-	if (wh2_packet_state == 0) {
+	if (packet_state == 0) {
 		// should history be 0, does it matter?
 		history = 0xFF;
-		wh2_packet_state = 1;
+		packet_state = 1;
 		// enable wh2_timeout
-		wh2_timeout = 1;
+		timeout = 1;
 	} // fall thru to wh2_packet_state one
 
 	  // acquire preamble
-	if (wh2_packet_state == 1) {
+	if (packet_state == 1) {
 		// shift history right and store new value
 		history <<= 1;
 		// store a 1 if required (right shift along will store a 0)
-		if (wh2_flags & LOGIC_HI) {
+		if (flags & LOGIC_HI) {
 			history |= 0x01;
 		}
 		// check if we have a valid start of frame
@@ -194,18 +211,18 @@ boolean  WH2TimerDecoder::accept()
 			packet_no = 0;
 			// start at 1 becuase only need to acquire 7 bits for first packet byte.
 			bit_no = 1;
-			wh2_packet[0] = wh2_packet[1] = wh2_packet[2] = wh2_packet[3] = wh2_packet[4] = 0;
+			packet[0] = packet[1] = packet[2] = packet[3] = packet[4] = 0;
 			// we've acquired the preamble
-			wh2_packet_state = 2;
+			packet_state = 2;
 		}
 		return false;
 	}
 	// acquire packet
-	if (wh2_packet_state == 2) {
+	if (packet_state == 2) {
 
-		wh2_packet[packet_no] <<= 1;
-		if (wh2_flags & LOGIC_HI) {
-			wh2_packet[packet_no] |= 0x01;
+		packet[packet_no] <<= 1;
+		if (flags & LOGIC_HI) {
+			packet[packet_no] |= 0x01;
 		}
 
 		bit_no++;
@@ -216,9 +233,9 @@ boolean  WH2TimerDecoder::accept()
 
 		if (packet_no > 4) {
 			// start the sampling process from scratch
-			wh2_packet_state = 0;
+			packet_state = 0;
 			// clear wh2_timeout
-			wh2_timeout = 0;
+			timeout = 0;
 			return true;
 		}
 	}
@@ -230,7 +247,7 @@ void  WH2TimerDecoder::calculate_crc()
 	//wh2_calculated_crc = crc8(wh2_packet, 4);
 	uint8_t len = 4;
 	uint8_t crc = 0;
-	uint8_t* addr = wh2_packet;
+	uint8_t* addr = packet;
 
 	// Indicated changes are from reference CRC-8 function in OneWire library
 	while (len--) {
@@ -242,31 +259,31 @@ void  WH2TimerDecoder::calculate_crc()
 			inbyte <<= 1; // changed from right shift
 		}
 	}
-	wh2_calculated_crc = crc;
+	calculated_crc = crc;
 
 }
 
 bool  WH2TimerDecoder::valid()
 {
-	return (wh2_calculated_crc == wh2_packet[4]);
+	return (calculated_crc == packet[4]);
 }
 
 int  WH2TimerDecoder::sensor_id()
 {
-	return (wh2_packet[0] << 4) + (wh2_packet[1] >> 4);
+	return (packet[0] << 4) + (packet[1] >> 4);
 }
 
 byte  WH2TimerDecoder::humidity()
 {
-	return wh2_packet[3];
+	return packet[3];
 }
 
 int  WH2TimerDecoder::temperature()
 {
 	int temperature;
-	temperature = ((wh2_packet[1] & B00000111) << 8) + wh2_packet[2];
+	temperature = ((packet[1] & B00000111) << 8) + packet[2];
 	// make negative
-	if (wh2_packet[1] & B00001000) {
+	if (packet[1] & B00001000) {
 		temperature = -temperature;
 	}
 	return temperature;

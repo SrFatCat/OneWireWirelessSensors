@@ -34,20 +34,30 @@
 // wh2_flags 
 #define GOT_PULSE 0x01
 #define LOGIC_HI  0x02
-volatile byte wh2_flags = 0;
-volatile byte wh2_packet_state = 0;
-volatile int wh2_timeout = 0;
-byte wh2_packet[5];
-byte wh2_calculated_crc;
 
 class WH2TimerDecoder {
-public:
+	volatile static byte flags;
+	volatile static byte packet_state;
+	volatile static int timeout;
+	byte packet[5];
+	byte calculated_crc;
 	bool accept();
 	void calculate_crc();
 	bool valid();
 
+public:
+
 	WH2TimerDecoder() {}
+	
+	static void setFlags(byte flags_) { flags = flags_; }
+	static void resetPacketState() { packet_state = 0; }
+	static bool isTimeout() { return timeout > 0; }
+	static void incTimeout() { timeout++; }
+	static void resetTimeout() { timeout = 0; }
+	static bool checkTimeout() { return HAS_TIMED_OUT(timeout); }
+
 	void init();
+	bool getSensorData();
 	int sensor_id();
 	byte humidity();
 	int temperature();
@@ -55,3 +65,6 @@ public:
 	inline void startTimerHandler() { TIMSK1 = 0x02; }
 };
 
+volatile byte WH2TimerDecoder::flags = 0;
+volatile byte WH2TimerDecoder::packet_state = 0;
+volatile int WH2TimerDecoder::timeout = 0;
