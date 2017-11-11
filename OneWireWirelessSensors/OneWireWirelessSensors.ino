@@ -11,6 +11,7 @@ struct SSensorData {
 	char buf_data[8] = {0,0,0,0,0,0,0,0};
 	bool received = false;
 	unsigned long prev_t = 0;
+	int id=0;
 } sensor_data[SENSORS_NUM];
 
 //WH2 Timer Handler
@@ -86,31 +87,40 @@ unsigned int timings[RC_MAX_PULSE_BUFFER];
 
 void oneWireHandler() {
 	uint8_t cmd;
-
+	int p = 0;
 	ds.waitForRequest(false);
-	for (;;) {
+	while (1) {
 		cmd = ds.recv();
-		if (cmd == 0xA1) {
-			ds.sendData(/*test_data */sensor_data[0].buf_data, 8);
-			sensor_data[0].received = false;
+		uint8_t idx = cmd - 0xA1;
+		if (idx < SENSORS_NUM) {
+			ds.sendData(/*test_data */sensor_data[idx].buf_data, 8);
+			sensor_data[idx].received = false;
+			p++;
 		}
-		else if (cmd == 0xA2) {
-			ds.sendData(/*test_data*/sensor_data[1].buf_data, 8);
-			sensor_data[1].received = false;
-		}
-		if (s1 && s2) {
-			wh2.startTimerHandler();
-			break;
-		}
+		if (p == SENSORS_NUM) break;
+
+
+
+		//bool isSended = true;
+		//for (uint8_t idx = 0; idx < SENSORS_NUM; idx++) {
+		//	if (cmd == 0xA1 + idx) {
+		//		ds.sendData(/*test_data */sensor_data[idx].buf_data, 8);
+		//		sensor_data[idx].received = false;
+		//	}
+		//	isSended = isSended && !sensor_data[idx].received;
+		//}
+		//if (isSended) break; 
 	}
 	Serial.print("^");
+	wh2.startTimerHandler();
 }
 
 void fillSensorData(uint8_t idx) {
 	int d = wh2.sensor_id();
 	sensor_data[idx].received = true;
+	sensor_data[idx].id = d;
 	sensor_data[idx].buf_data[0] = highByte(d);
-	sensor_data[idx].buf_data[1] = lowByte(d);
+	sensor_data[idx].buf_data[1] = d & 0x00FF;
 	sensor_data[idx].prev_t = millis() - sensor_data[idx].prev_t;
 	sensor_data[idx].buf_data[2] = highByte(int(sensor_data[idx].prev_t / 1000));
 	sensor_data[idx].buf_data[3] = lowByte(int(sensor_data[idx].prev_t / 1000));
@@ -118,12 +128,7 @@ void fillSensorData(uint8_t idx) {
 	sensor_data[idx].buf_data[4] = highByte(d);
 	sensor_data[idx].buf_data[5] = lowByte(d);
 	sensor_data[idx].buf_data[6] = wh2.humidity();
-	sensor_data[idx].buf_data[7] = OneWireSlave::crc8(sensor_data[0].buf_data, 7);
-	for (int i = 0; i < 8; i++) {
-		Serial.print((int)(sensor_data[0].buf_data[i]));
-		Serial.print(".");
-	}
-	Serial.println();
+	sensor_data[idx].buf_data[7] = OneWireSlave::crc8(sensor_data[idx].buf_data, 7);
 }
 
 void setup() {
@@ -136,32 +141,56 @@ void setup() {
 	wh2.init();
 
 	ds.setRom(rom); 
-
-	sensor_data[0].buf_data[0] = sensor_data[0].buf_data[1] = sensor_data[1].buf_data[0] = sensor_data[1].buf_data[1] = 0;
 }
 // id id t t tm tm vl
 
 void loop() {
 	if (wh2.getSensorData()) {
 		wh2.stopTimerHandler();
-		bool isReceivedComplete = false;
-		if (sensor_data[0].buf_data[0] << 8 | sensor_data[0].buf_data[1] == wh2.sensor_id()) {
-			if (sensor_data[0].received) isReceivedComplete = true;
-			fillSensorData(0);
+		bool isReceivedDuplet = false;
+		bool isIDFinded = false;
+		int id = wh2.sensor_id(); 
+		for (uint8_t idx = 0; idx < SENSORS_NUM; idx++) {
+			uint16_t id_r = (unsigned int)(sensor_data[idx].buf_data[0]) << 8 | sensor_data[idx].buf_data[1];
+			Serial.print(">>>>>>>>> " + String((int)(sensor_data[idx].buf_data[0])) + " == " + highByte(id));
+			Serial.print(" && " + String((int)(sensor_data[idx].buf_data[1])) + " == " + String(id & 0x00FF));
+			Serial.println(" (" + String(sensor_data[idx].id) + " == " + String(id) + ")");
+			if (sensor_data[idx].id == id) {
+				if (sensor_data[idx].received) isReceivedDuplet = true;
+				fillSensorData(idx);
+				isIDFinded = true;
+				break;
+			}
 		}
-		else
-			if (sensor_data[1].buf_data[0] << 8 | sensor_data[1].buf_data[1] == wh2.sensor_id()) {
-				if (sensor_data[1].received) isReceivedComplete = true;
-				fillSensorData(1);
+		if (!isIDFinded) {
+			for (uint8_t idx = 0; idx < SENSORS_NUM; idx++) {
+				if (!sensor_data[idx].received) {
+					fillSensorData(idx);
+					isIDFinded = true;
+					break;
+				}
 			}
-			else {
-				if (!sensor_data[0].received) fillSensorData(0); else fillSensorData(1);
+		}
+		if (!isIDFinded) {
+			Serial.println("err");
+		}
+		for (uint8_t idx = 0; idx < SENSORS_NUM; idx++) {
+			Serial.print("[" + String(idx) + "] R=(" + sensor_data[idx].received + ") 0x");
+			Serial.print(sensor_data[idx].buf_data[0] << 8 | sensor_data[idx].buf_data[1], HEX);
+			Serial.print(": ");
+			for (int i = 0; i < 8; i++) {
+				Serial.print((int)(sensor_data[idx].buf_data[i]));
+				Serial.print(".");
 			}
-
-
-		int id = wh2.sensor_id();
-		
-		s1 = s2 = false;
+			Serial.println();
+		}
+		if (!isReceivedDuplet) {
+			for (uint8_t idx = 0; idx < SENSORS_NUM; idx++)
+				if (!sensor_data[idx].received) {
+					wh2.startTimerHandler();
+					return;
+				}
+		}
 		oneWireHandler();
 	}
 }
@@ -265,7 +294,8 @@ void  WH2TimerDecoder::calculate_crc()
 
 bool  WH2TimerDecoder::valid()
 {
-	return (calculated_crc == packet[4]);
+	bool retn = (calculated_crc == packet[4]);
+	return retn && temperature() <600 && temperature() > -600 && humidity() >= 0 && humidity() <= 100;
 }
 
 int  WH2TimerDecoder::sensor_id()
