@@ -30,6 +30,9 @@
     <ClInclude Include="WH2Sensor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\MyArduino.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="RCSwitchOregon.cpp">

@@ -1,4 +1,7 @@
-﻿#include "WH2Sensor.h"
+﻿#define DEBUG
+
+#include "MyArduino.h"
+#include "WH2Sensor.h"
 #include "RCSwitchOregon.h"
 #include "OneWireSlave.h"
 
@@ -92,38 +95,29 @@ void oneWireHandler() {
 	while (1) {
 		cmd = ds.recv();
 		uint8_t idx = cmd - 0xA1;
-		if (idx < SENSORS_NUM) {
-			ds.sendData(/*test_data */sensor_data[idx].buf_data, 8);
-			sensor_data[idx].received = false;
+		if (idx < SENSORS_NUM ) {
+			if (sensor_data[idx].received) {
+				ds.sendData(/*test_data */sensor_data[idx].buf_data, 8);
+				sensor_data[idx].received = false;
+			}
 			p++;
 		}
 		if (p == SENSORS_NUM) break;
-
-
-
-		//bool isSended = true;
-		//for (uint8_t idx = 0; idx < SENSORS_NUM; idx++) {
-		//	if (cmd == 0xA1 + idx) {
-		//		ds.sendData(/*test_data */sensor_data[idx].buf_data, 8);
-		//		sensor_data[idx].received = false;
-		//	}
-		//	isSended = isSended && !sensor_data[idx].received;
-		//}
-		//if (isSended) break; 
 	}
-	Serial.print("^");
+	DEBUG_PRINT("^");
 	wh2.startTimerHandler();
 }
 
 void fillSensorData(uint8_t idx) {
-	int d = wh2.sensor_id();
+	uint16_t d = wh2.sensor_id();
 	sensor_data[idx].received = true;
 	sensor_data[idx].id = d;
 	sensor_data[idx].buf_data[0] = highByte(d);
 	sensor_data[idx].buf_data[1] = d & 0x00FF;
-	sensor_data[idx].prev_t = millis() - sensor_data[idx].prev_t;
-	sensor_data[idx].buf_data[2] = highByte(int(sensor_data[idx].prev_t / 1000));
-	sensor_data[idx].buf_data[3] = lowByte(int(sensor_data[idx].prev_t / 1000));
+	d = (uint16_t)(millis() / 1000L);
+	sensor_data[idx].prev_t = d;
+	sensor_data[idx].buf_data[2] = highByte(d);
+	sensor_data[idx].buf_data[3] = lowByte(d);
 	d = wh2.temperature();
 	sensor_data[idx].buf_data[4] = highByte(d);
 	sensor_data[idx].buf_data[5] = lowByte(d);
@@ -132,9 +126,10 @@ void fillSensorData(uint8_t idx) {
 }
 
 void setup() {
+#ifdef DEBUG
 	Serial.begin(9600);
-	Serial.println("\n[ookDecoder]");
-
+	Serial.println("\n1-Wire WL-Sensors...");
+#endif
 	pinMode(2, INPUT);
 	rcs.enableReceive(0);
 
@@ -151,12 +146,10 @@ void loop() {
 		bool isIDFinded = false;
 		int id = wh2.sensor_id(); 
 		for (uint8_t idx = 0; idx < SENSORS_NUM; idx++) {
-			uint16_t id_r = (unsigned int)(sensor_data[idx].buf_data[0]) << 8 | sensor_data[idx].buf_data[1];
-			Serial.print(">>>>>>>>> " + String((int)(sensor_data[idx].buf_data[0])) + " == " + highByte(id));
-			Serial.print(" && " + String((int)(sensor_data[idx].buf_data[1])) + " == " + String(id & 0x00FF));
-			Serial.println(" (" + String(sensor_data[idx].id) + " == " + String(id) + ")");
 			if (sensor_data[idx].id == id) {
-				if (sensor_data[idx].received) isReceivedDuplet = true;
+				if (sensor_data[idx].received && (uint16_t)(millis() / 1000L) - sensor_data[idx].prev_t > 5) {
+					isReceivedDuplet = true;
+				}
 				fillSensorData(idx);
 				isIDFinded = true;
 				break;
@@ -164,13 +157,14 @@ void loop() {
 		}
 		if (!isIDFinded) {
 			for (uint8_t idx = 0; idx < SENSORS_NUM; idx++) {
-				if (!sensor_data[idx].received) {
+				if (sensor_data[idx].id == 0) {
 					fillSensorData(idx);
 					isIDFinded = true;
 					break;
 				}
 			}
 		}
+#ifdef DEBUG
 		if (!isIDFinded) {
 			Serial.println("err");
 		}
@@ -184,6 +178,7 @@ void loop() {
 			}
 			Serial.println();
 		}
+#endif
 		if (!isReceivedDuplet) {
 			for (uint8_t idx = 0; idx < SENSORS_NUM; idx++)
 				if (!sensor_data[idx].received) {
