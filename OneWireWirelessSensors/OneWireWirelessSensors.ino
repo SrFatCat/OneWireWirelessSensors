@@ -32,11 +32,11 @@ struct SSensorData {
 
 WH2TimerDecoder wh2; //WH2 TESA TRANSMITTER FOR WS1150, FOSHK WH1150, WH1170 
 
-OregonDecoderV3 orscV3; // Oregon Scientific V3 sensor
+// OregonDecoderV3 orscV3; // Oregon Scientific V3 sensor
 
-RCSwitch rcs; //RCswitch sensor
+// RCSwitch rcs; //RCswitch sensor
 
-unsigned int timings[RC_MAX_PULSE_BUFFER]; //orsc timings buffer
+// unsigned int timings[RC_MAX_PULSE_BUFFER]; //orsc timings buffer
 
 void oneWireHandler() {
 	uint8_t cmd;
@@ -63,7 +63,7 @@ void fillSensorData(uint8_t idx) {
 	sensor_data[idx].received = true;
 	sensor_data[idx].id = d;
 	sensor_data[idx].buf_data[0] = highByte(d);
-	sensor_data[idx].buf_data[1] = d & 0x00FF;
+	sensor_data[idx].buf_data[1] = lowByte(d);
 	d = (uint16_t)(millis() / 1000L);
 	sensor_data[idx].prev_t = d;
 	sensor_data[idx].buf_data[2] = highByte(d);
@@ -81,13 +81,12 @@ void setup() {
 	Serial.println("\n1-Wire WL-Sensors...");
 #endif
 	pinMode(2, INPUT);
-	rcs.enableReceive(0);
+	//rcs.enableReceive(0);
 
 	wh2.init();
 
 	ds.setRom(rom); 
 }
-// id id t t tm tm vl
 
 void loop() {
 	if (wh2.getSensorData()) {
