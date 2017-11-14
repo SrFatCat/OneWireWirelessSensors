@@ -1,3 +1,17 @@
+/*
+Name:		WH2Sensor.h
+Created:	01.11.2017
+Author:	Luc Small modifyed Alexey Bogdan aka Sr.FatCat
+
+Based on BetterWH2 https://github.com/lucsmall/BetterWH2
+An improved Arduino sketch for decoding packets from the WH2 outdoor temperature and humidity 
+sensor from Fine Offset Electronics.
+Created Luc Small on 19 July 2013. Released into the public domain.
+This code contains a CRC - 8 function adapted 
+from the Arduino OneWire library : http://www.pjrc.com/teensy/td_libs_OneWire.html Thanks go to the authors of that project.
+
+*/
+
 #pragma once
 // Read data from 433MHz receiver on digital pin 2
 #define RF_IN 2
@@ -64,7 +78,3 @@ public:
 	inline void stopTimerHandler() { TIMSK1 = 0x00; }
 	inline void startTimerHandler() { TIMSK1 = 0x02; }
 };
-
-volatile byte WH2TimerDecoder::flags = 0;
-volatile byte WH2TimerDecoder::packet_state = 0;
-volatile int WH2TimerDecoder::timeout = 0;
