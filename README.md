@@ -1,9 +1,9 @@
-#OneWire Wireless sensors
+# OneWire Wireless sensors
 
 Чрезвычайно неоригинальная компиляция различных декодеров беспроводных датчиков для погодных
 станций и модифицированой (не мной) библиотеки OneWireSlave
 
-##Использовались:
+## Использовались:
 
 OneWireSlave by Alexander Gordeyev based on Jim's Studt OneWire library v2.0
 
@@ -14,4 +14,4 @@ rc-switch by Suat Özgür (мною добавлена возможность р
 Oregon decoder by Dominique Pierre (мною добавлены классы верхнего уровня)
 
 
-Вообще на (C) не претендую
+_Вообще на **©** не претендую_
