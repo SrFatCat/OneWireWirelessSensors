@@ -32,9 +32,9 @@ struct SSensorData {
 
 WH2TimerDecoder wh2; //WH2 TESA TRANSMITTER FOR WS1150, FOSHK WH1150, WH1170 
 
-// OregonDecoderV3 orscV3; // Oregon Scientific V3 sensor
+OregonDecoderV3 orscV3; // Oregon Scientific V3 sensor
 
-// RCSwitch rcs; //RCswitch sensor
+//RCSwitch rcs; //RCswitch sensor
 
 // unsigned int timings[RC_MAX_PULSE_BUFFER]; //orsc timings buffer
 
@@ -137,4 +137,20 @@ void loop() {
 		}
 		oneWireHandler();
 	}
+
+	// Позже
+	//if (rcs.available()) {
+	//	unsigned long receivedCode = rcs.getReceivedValue();
+	//	if (receivedCode == 0) {
+	//		// обработка:не верный формат данных
+	//		DEBUG_PRINT("Incorrect data received");
+	//	}
+	//	else {
+	//		if (KEY_TEMPER <= receivedCode && KEY_TEMPER + 999 > receivedCode) {
+	//			pump.setTemperature((float)(receivedCode - KEY_TEMPER - 500) / 10);
+	//		}
+	//	}
+
+	//	rcs.resetAvailable(); // сброс данных.
+	//}
 }
