@@ -17,6 +17,7 @@ ToDo:
 #include "WH2Sensor.h"
 #include "RCSwitchOregon.h"
 #include "OneWireSlave.h"
+#include "EEPROM.h"
 
 #define PIN_ONE_WIRE 3
 OneWireSlave ds(PIN_ONE_WIRE);
@@ -30,6 +31,14 @@ struct SSensorData {
 	int id=0;
 } sensor_data[SENSORS_NUM];
 
+struct SEEPROMData {
+	uint8_t sensorsNum;
+	uint8_t rom[8];
+	SSensorData sensor_data[SENSORS_NUM];
+};
+
+bool isEEPROMSaved = false;
+
 WH2TimerDecoder wh2; //WH2 TESA TRANSMITTER FOR WS1150, FOSHK WH1150, WH1170 
 
 OregonDecoderV3 orscV3; // Oregon Scientific V3 sensor
@@ -37,6 +46,14 @@ OregonDecoderV3 orscV3; // Oregon Scientific V3 sensor
 //RCSwitch rcs; //RCswitch sensor
 
 // unsigned int timings[RC_MAX_PULSE_BUFFER]; //orsc timings buffer
+void resetData() {
+	for (uint8_t idx = 0; idx < SENSORS_NUM; idx++) {
+		for (int i=0;  i<8; i++) sensor_data[idx].buf_data[i] = 0;
+		sensor_data[idx].received = false;
+		sensor_data[idx].id = 0;
+	}
+	isEEPROMSaved = false;
+}
 
 void oneWireHandler() {
 	uint8_t cmd;
@@ -44,15 +61,21 @@ void oneWireHandler() {
 	ds.waitForRequest(false);
 	while (1) {
 		cmd = ds.recv();
-		uint8_t idx = cmd - 0xA1;
-		if (idx < SENSORS_NUM ) {
-			if (sensor_data[idx].received) {
-				ds.sendData(sensor_data[idx].buf_data, 8);
-				sensor_data[idx].received = false;
+		if (cmd >= 0xA0 && cmd <= 0xAF) {
+			uint8_t idx = cmd - 0xA1;
+			if (idx < SENSORS_NUM) {
+				if (sensor_data[idx].received) {
+					ds.sendData(sensor_data[idx].buf_data, 8);
+					sensor_data[idx].received = false;
+				}
+				p++;
 			}
-			p++;
+			if (p == SENSORS_NUM) break;
 		}
-		if (p == SENSORS_NUM) break;
+		else if (cmd == 0xCC) {
+			resetData();
+			break;
+		}
 	}
 	DEBUG_PRINT("^");
 	wh2.startTimerHandler();
@@ -75,6 +98,17 @@ void fillSensorData(uint8_t idx) {
 	sensor_data[idx].buf_data[7] = OneWireSlave::crc8(sensor_data[idx].buf_data, 7);
 }
 
+void saveEEPROM() {
+	SEEPROMData tmp;
+	tmp.sensorsNum = SENSORS_NUM;
+	memcpy(tmp.rom, rom, sizeof(rom));
+	for (uint8_t idx = 0; idx < SENSORS_NUM; idx++) {
+		memcpy( &(tmp.sensor_data[idx]), &(sensor_data[idx]), sizeof(SSensorData));
+	}
+	EEPROM.put(0, tmp);
+	isEEPROMSaved = true;
+}
+
 void setup() {
 #ifdef DEBUG
 	Serial.begin(9600);
@@ -82,6 +116,17 @@ void setup() {
 #endif
 	pinMode(2, INPUT);
 	//rcs.enableReceive(0);
+	SEEPROMData tmp;
+	EEPROM.get(0, tmp);
+	if (tmp.sensorsNum == SENSORS_NUM) {
+#ifdef DEBUG
+		Serial.println("Read from EEPROM");
+#endif
+		memcpy(rom, tmp.rom, sizeof(rom));
+		for (uint8_t idx = 0; idx < SENSORS_NUM; idx++) {
+			memcpy(&(sensor_data[idx]), &(tmp.sensor_data[idx]), sizeof(SSensorData));
+		}
+	}
 
 	wh2.init();
 
@@ -134,6 +179,7 @@ void loop() {
 					wh2.startTimerHandler();
 					return;
 				}
+			if (!isEEPROMSaved) saveEEPROM();
 		}
 		oneWireHandler();
 	}
