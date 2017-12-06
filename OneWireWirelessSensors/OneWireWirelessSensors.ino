@@ -11,7 +11,10 @@ ToDo:
 
 */
 
-#define DEBUG
+//#define DEBUG
+
+#define DIRECT_MODE_INPUT(base, mask)  ((*(base+1)) &= ~(mask))
+#define DIRECT_READ(base, mask)        (((*(base)) & (mask)) ? 1 : 0)
 
 #include "MyArduino.h"
 #include "WH2Sensor.h"
@@ -74,6 +77,9 @@ void oneWireHandler() {
 		}
 		else if (cmd == 0xCC) {
 			resetData();
+			char buf[3] = "Ok";
+			ds.sendData(buf, 3);
+			DEBUG_PRINT("Reset ok\n");
 			break;
 		}
 	}
@@ -111,10 +117,11 @@ void saveEEPROM() {
 
 void setup() {
 #ifdef DEBUG
-	Serial.begin(9600);
+	Serial.begin(115200);
 	Serial.println("\n1-Wire WL-Sensors...");
 #endif
 	pinMode(2, INPUT);
+	pinMode(PIN_ONE_WIRE, INPUT);
 	//rcs.enableReceive(0);
 	SEEPROMData tmp;
 	EEPROM.get(0, tmp);
@@ -134,6 +141,28 @@ void setup() {
 }
 
 void loop() {
+	static uint8_t mask = digitalPinToBitMask(PIN_ONE_WIRE);
+	volatile static uint8_t *reg asm("r30") = portInputRegister(digitalPinToPort(PIN_ONE_WIRE));
+
+	static uint32_t time_low_signal = millis();
+	static bool p = DIRECT_READ(reg, mask);
+
+	uint32_t t = millis();
+
+	if ( DIRECT_READ(reg, mask) ) {
+		if (time_low_signal > 0 && t - time_low_signal > 990) {
+			DEBUG_PRINT("v");
+			wh2.stopTimerHandler();
+			oneWireHandler();
+			cli();
+			DIRECT_MODE_INPUT(reg, mask);
+			sei();
+			wh2.startTimerHandler();
+		}
+		time_low_signal = 0;
+	}
+	else if (time_low_signal == 0) time_low_signal = t;
+
 	if (wh2.getSensorData()) {
 		wh2.stopTimerHandler();
 		bool isReceivedDuplet = false;
@@ -182,6 +211,10 @@ void loop() {
 			if (!isEEPROMSaved) saveEEPROM();
 		}
 		oneWireHandler();
+		cli();
+		DIRECT_MODE_INPUT(reg, mask);
+		sei();
+		time_low_signal = 0;
 	}
 
 	// Позже
@@ -197,6 +230,4 @@ void loop() {
 	//		}
 	//	}
 
-	//	rcs.resetAvailable(); // сброс данных.
-	//}
 }
